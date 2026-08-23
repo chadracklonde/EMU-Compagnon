@@ -1,7 +1,5 @@
 name: Build APK
 
-# Se déclenche à chaque push sur main, à chaque pull request, et peut aussi
-# être lancé manuellement depuis l'onglet "Actions" de GitHub.
 on:
   push:
     branches: [main]
@@ -31,6 +29,14 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Générer les dossiers natifs (android/ios) si absents
+        run: |
+          if [ ! -d "android" ]; then
+            flutter create --platforms=android,ios --org com.emucompagnon --project-name emu_compagnon /tmp/scaffold
+            cp -r /tmp/scaffold/android .
+            cp -r /tmp/scaffold/ios .
+          fi
+
       - name: Vérifier l'environnement
         run: flutter doctor -v
 
@@ -49,8 +55,6 @@ jobs:
       - name: Construire l'App Bundle (pour le Play Store)
         run: flutter build appbundle --release
 
-      # Rend l'APK téléchargeable depuis l'onglet "Actions" > ce run,
-      # même sans créer de release GitHub.
       - name: Publier l'APK comme artefact
         uses: actions/upload-artifact@v4
         with:
@@ -65,8 +69,6 @@ jobs:
           path: build/app/outputs/bundle/release/app-release.aab
           retention-days: 30
 
-  # Crée automatiquement une Release GitHub avec l'APK attaché
-  # quand tu pousses un tag de version, ex. : git tag v1.0.0 && git push --tags
   release:
     name: Créer une Release GitHub
     needs: build
@@ -91,6 +93,14 @@ jobs:
           flutter-version: '3.24.0'
           channel: 'stable'
           cache: true
+
+      - name: Générer les dossiers natifs (android/ios) si absents
+        run: |
+          if [ ! -d "android" ]; then
+            flutter create --platforms=android,ios --org com.emucompagnon --project-name emu_compagnon /tmp/scaffold
+            cp -r /tmp/scaffold/android .
+            cp -r /tmp/scaffold/ios .
+          fi
 
       - name: Récupérer les dépendances
         run: flutter pub get
