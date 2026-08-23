@@ -1,41 +1,104 @@
-name: emu_compagnon
-description: "EMU Compagnon — Bible, Cantiques, Dictionnaire biblique et Liturgie EMU"
-publish_to: 'none'
-version: 1.0.0+1
+name: Build APK
 
-environment:
-  sdk: '>=3.3.0 <4.0.0'
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
 
-dependencies:
-  flutter:
-    sdk: flutter
-  sqflite: ^2.3.3
-  path: ^1.9.0
-  path_provider: ^2.1.3
-  provider: ^6.1.2
-  go_router: ^14.2.0
-  shared_preferences: ^2.2.3
-  url_launcher: ^6.3.1
+jobs:
+  build:
+    name: Build APK (release)
+    runs-on: ubuntu-latest
 
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^4.0.0
-  flutter_launcher_icons: ^0.14.1
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
 
-flutter:
-  uses-material-design: true
-  assets:
-    - assets/db/
-    - assets/icons/
+      - name: Installer Java (requis par Gradle/Android)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
-# Generates native iOS/Android launcher icons from a single source image.
-# Run once after `flutter pub get`:  dart run flutter_launcher_icons
-flutter_launcher_icons:
-  android: true
-  ios: true
-  image_path: "assets/icons/app_icon.png"
-  min_sdk_android: 21
-  adaptive_icon_background: "#7A2426"
-  adaptive_icon_foreground: "assets/icons/app_icon_foreground.png"
-  remove_alpha_ios: true
+      - name: Installer Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Générer les dossiers natifs (android/ios) si absents
+        run: flutter create . --platforms=android,ios --org com.emucompagnon
+
+      - name: Vérifier l'environnement
+        run: flutter doctor -v
+
+      - name: Récupérer les dépendances
+        run: flutter pub get
+
+      - name: Générer les icônes de l'app
+        run: dart run flutter_launcher_icons
+
+      - name: Analyser le code (non bloquant)
+        run: flutter analyze || true
+
+      - name: Construire l'APK release
+        run: flutter build apk --release
+
+      - name: Construire l'App Bundle (pour le Play Store)
+        run: flutter build appbundle --release
+
+      - name: Publier l'APK comme artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: emu-compagnon-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
+
+      - name: Publier l'App Bundle comme artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: emu-compagnon-release-aab
+          path: build/app/outputs/bundle/release/app-release.aab
+          retention-days: 30
+
+  release:
+    name: Créer une Release GitHub
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Installer Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Générer les dossiers natifs (android/ios) si absents
+        run: flutter create . --platforms=android,ios --org com.emucompagnon
+
+      - name: Récupérer les dépendances
+        run: flutter pub get
+
+      - name: Générer les icônes de l'app
+        run: dart run flutter_launcher_icons
+
+      - name: Construire l'APK release
+        run: flutter build apk --release
+
+      - name: Créer la Release avec l'APK
